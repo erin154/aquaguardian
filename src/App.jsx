@@ -42,15 +42,14 @@ const INSIGHT_CARDS = [
 function getStage(health) { return SPIRIT_STAGES.find(s => health >= s.min) }
 function getTodayKey() { return new Date().toISOString().split('T')[0] }
 
-function computeHealth(logs) {
-  if (logs.length === 0) return 75
-  let score = 75
+function computeHealthDelta(logs) {
+  let delta = 0
   logs.forEach(log => {
     const ratio = log.gallons / log.activityGoal
-    if (ratio <= 1) score += Math.round((1 - ratio) * 20 + 5)
-    else score -= Math.round((ratio - 1) * 25)
+    if (ratio <= 1) delta += Math.round((1 - ratio) * 20 + 5)
+    else delta -= Math.round((ratio - 1) * 25)
   })
-  return Math.max(0, Math.min(100, score))
+  return delta
 }
 
 function GoalBar({ used, goal, avg }) {
@@ -87,7 +86,9 @@ function SpiritWidget({ health, streak, onChallengeComplete }) {
       <div style={{ fontSize: 60, marginBottom: 6, lineHeight: 1 }}>{stage.emoji}</div>
       <div style={{ fontSize: 11, fontWeight: 600, color: stage.color, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Stage: {stage.name}</div>
       <div style={{ fontSize: 17, fontWeight: 600, color: stage.color }}>Your water spirit is {stage.label}</div>
-      <div style={{ fontSize: 12, color: '#888', marginTop: 2, marginBottom: 10 }}>Health: {health}% {streak > 0 ? `· 🔥 ${streak}-day streak` : ''}</div>
+      <div style={{ fontSize: 12, color: '#888', marginTop: 2, marginBottom: 10 }}>
+        Health: {health}% {streak > 0 ? `· 🔥 ${streak}-day streak` : ''}
+      </div>
       <div style={{ height: 10, borderRadius: 5, background: 'rgba(255,255,255,0.6)', overflow: 'hidden', marginBottom: 4 }}>
         <div style={{ height: '100%', width: `${health}%`, background: stage.color, borderRadius: 5, transition: 'width 0.6s ease' }} />
       </div>
@@ -183,7 +184,8 @@ function LogHistory({ logs }) {
         </div>
       ))}
       <div style={{ paddingTop: 10, display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-        <span style={{ color: '#888' }}>Total</span><span style={{ fontWeight: 600 }}>{total.toFixed(1)} gal</span>
+        <span style={{ color: '#888' }}>Total</span>
+        <span style={{ fontWeight: 600 }}>{total.toFixed(1)} gal</span>
       </div>
       {saved > 0 && (
         <div style={{ paddingTop: 4, display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
@@ -219,7 +221,7 @@ function BillSummary({ logs, rate }) {
 function Settings({ rate, onChange, user }) {
   const [open, setOpen] = useState(false)
   return (
-    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 16, padding: 16, marginBottom: 32 }}>
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 16, padding: 16, marginBottom: 16 }}>
       <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
         <div style={{ fontWeight: 600, fontSize: 16 }}>⚙️ Settings</div>
         <div style={{ fontSize: 13, color: '#888' }}>{open ? 'close' : 'edit'}</div>
@@ -234,10 +236,6 @@ function Settings({ rate, onChange, user }) {
             <span style={{ fontSize: 13, color: '#888' }}>/ gal</span>
           </div>
           <div style={{ fontSize: 12, color: '#aaa', marginBottom: 16 }}>Signed in as {user.email}</div>
-          <button onClick={() => signOut(auth)} style={{
-            width: '100%', padding: 10, borderRadius: 8, border: '1px solid #eee',
-            background: '#fafafa', color: '#888', fontSize: 13, cursor: 'pointer'
-          }}>Sign out</button>
         </div>
       )}
     </div>
@@ -249,9 +247,11 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true)
   const [logs, setLogs] = useState([])
   const [health, setHealth] = useState(75)
+  const [baseHealth, setBaseHealth] = useState(75)
   const [streak, setStreak] = useState(0)
   const [rate, setRate] = useState(0.004)
 
+  // Listen for auth state changes
   useEffect(() => {
     return onAuthStateChanged(auth, u => {
       setUser(u)
@@ -259,18 +259,7 @@ export default function App() {
     })
   }, [])
 
-  useEffect(() => {
-    if (!user) return
-    const today = getTodayKey()
-    const q = query(collection(db, 'logs'), where('uid', '==', user.uid), where('date', '==', today))
-    const unsub = onSnapshot(q, snap => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-      setLogs(data)
-      setHealth(computeHealth(data))
-    })
-    return unsub
-  }, [user])
-
+  // Load household settings (rate, streak, saved health) from Firestore
   useEffect(() => {
     if (!user) return
     getDoc(doc(db, 'households', user.uid)).then(snap => {
@@ -278,9 +267,45 @@ export default function App() {
         const d = snap.data()
         if (d.rate) setRate(d.rate)
         if (d.streak) setStreak(d.streak)
+        if (d.baseHealth !== undefined) {
+          setBaseHealth(d.baseHealth)
+          setHealth(d.baseHealth)
+        }
       }
     })
   }, [user])
+
+  // Subscribe to today's logs in real time
+  useEffect(() => {
+    if (!user) return
+    const today = getTodayKey()
+    const q = query(
+      collection(db, 'logs'),
+      where('uid', '==', user.uid),
+      where('date', '==', today)
+    )
+    const unsub = onSnapshot(q, snap => {
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      setLogs(data)
+      // Apply today's delta on top of the persisted base health
+      setBaseHealth(prev => {
+        const delta = computeHealthDelta(data)
+        const newHealth = Math.max(0, Math.min(100, Math.max(40, prev) + delta))
+        setHealth(newHealth)
+        return prev
+      })
+    })
+    return unsub
+  }, [user])
+
+  // Save health to Firestore 1 second after it changes
+  useEffect(() => {
+    if (!user) return
+    const timeout = setTimeout(() => {
+      setDoc(doc(db, 'households', user.uid), { baseHealth: health }, { merge: true })
+    }, 1000)
+    return () => clearTimeout(timeout)
+  }, [health, user])
 
   async function handleLog(entry) {
     if (!user) return
@@ -316,8 +341,15 @@ export default function App() {
 
   return (
     <div style={{ maxWidth: 420, margin: '0 auto', padding: '20px 16px', fontFamily: 'system-ui, sans-serif', background: '#f9f9f9', minHeight: '100vh' }}>
-      <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 2 }}>💧 AquaGuardian</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+        <div style={{ fontSize: 22, fontWeight: 700 }}>💧 AquaGuardian</div>
+        <button onClick={() => signOut(auth)} style={{
+          background: 'none', border: '1px solid #ddd', borderRadius: 20,
+          padding: '6px 14px', fontSize: 12, color: '#888', cursor: 'pointer'
+        }}>Sign out</button>
+      </div>
       <div style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>Family water tracker</div>
+
       <SpiritWidget health={health} streak={streak} onChallengeComplete={handleChallengeComplete} />
       {logs.length > 0 && <InsightCard logs={logs} rate={rate} streak={streak} />}
       <ActivityLogger onLog={handleLog} />
