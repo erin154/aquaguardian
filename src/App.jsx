@@ -247,7 +247,6 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true)
   const [logs, setLogs] = useState([])
   const [health, setHealth] = useState(75)
-  const [baseHealth, setBaseHealth] = useState(75)
   const [streak, setStreak] = useState(0)
   const [rate, setRate] = useState(0.004)
 
@@ -275,41 +274,34 @@ export default function App() {
     })
   }, [user])
 
-  // Subscribe to today's logs in real time
-  useEffect(() => {
-    if (!user) return
-    const today = getTodayKey()
-    const q = query(
-      collection(db, 'logs'),
-      where('uid', '==', user.uid),
-      where('date', '==', today)
-    )
-    const unsub = onSnapshot(q, snap => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-      setLogs(data)
-      // Apply today's delta on top of the persisted base health
-      setBaseHealth(prev => {
-        const delta = computeHealthDelta(data)
-        const newHealth = Math.max(0, Math.min(100, Math.max(40, prev) + delta))
-        setHealth(newHealth)
-        return prev
-      })
-    })
-    return unsub
-  }, [user])
-
-  // Save health to Firestore 1 second after it changes
-  useEffect(() => {
-    if (!user) return
-    const timeout = setTimeout(() => {
-      setDoc(doc(db, 'households', user.uid), { baseHealth: health }, { merge: true })
-    }, 1000)
-    return () => clearTimeout(timeout)
-  }, [health, user])
+// Subscribe to today's logs in real time — just sync the list, don't recompute health here
+useEffect(() => {
+  if (!user) return
+  const today = getTodayKey()
+  const q = query(
+    collection(db, 'logs'),
+    where('uid', '==', user.uid),
+    where('date', '==', today)
+  )
+  const unsub = onSnapshot(q, snap => {
+    const data = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    setLogs(data)
+  })
+  return unsub
+}, [user])
 
   async function handleLog(entry) {
-    if (!user) return
-    await addDoc(collection(db, 'logs'), {
+  if (!user) return
+  const ratio = entry.gallons / entry.activity.goalGallons
+  let delta = 0
+  if (ratio <= 1) delta = Math.round((1 - ratio) * 20 + 5)
+  else delta = -Math.round((ratio - 1) * 25)
+
+  const newHealth = Math.max(0, Math.min(100, health + delta))
+  setHealth(newHealth)
+
+  await Promise.all([
+    addDoc(collection(db, 'logs'), {
       uid: user.uid,
       date: getTodayKey(),
       gallons: entry.gallons,
@@ -319,16 +311,20 @@ export default function App() {
       activityGoal: entry.activity.goalGallons,
       activityAvg: entry.activity.avgGallons,
       timestamp: Date.now(),
-    })
-  }
+    }),
+    setDoc(doc(db, 'households', user.uid), { baseHealth: newHealth }, { merge: true })
+  ])
+}
 
   async function handleRateChange(newRate) {
     setRate(newRate)
     if (user) await setDoc(doc(db, 'households', user.uid), { rate: newRate }, { merge: true })
   }
 
-  function handleChallengeComplete(reward) {
-    setHealth(h => Math.min(100, h + reward))
+  async function handleChallengeComplete(reward) {
+    const newHealth = Math.min(100, health + reward)
+    setHealth(newHealth)
+    if (user) await setDoc(doc(db, 'households', user.uid), { baseHealth: newHealth }, { merge: true })
   }
 
   if (authLoading) return (
