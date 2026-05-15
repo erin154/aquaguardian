@@ -1,17 +1,15 @@
 import { useState, useEffect } from 'react'
+import { Routes, Route } from 'react-router-dom'
 import { auth, db } from './firebase'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { collection, addDoc, query, where, onSnapshot, getDocs, doc, setDoc, getDoc } from 'firebase/firestore'
-import Auth from './Auth'
-import GoalBar        from './components/GoalBar'
-import BillSummary    from './components/BillSummary'
-import LogHistory     from './components/LogHistory'
-import Settings       from './components/Settings'
-import InsightCard    from './components/InsightCard'
-import SpiritWidget   from './components/SpiritWidget'
-import ActivityLogger from './components/ActivityLogger'
+import Auth          from './Auth'
+import BottomNav     from './components/BottomNav'
+import DashboardPage from './pages/DashboardPage'
+import BillPage      from './pages/BillPage'
+import SettingsPage  from './pages/SettingsPage'
 
-// Date helpers 
+// ─── Date helpers ────────────────────────────────────────────────────────────
 
 function getTodayKey() {
   return new Date().toISOString().split('T')[0]
@@ -23,20 +21,15 @@ function getYesterdayKey() {
   return d.toISOString().split('T')[0]
 }
 
-// Streak logic
-// Runs once on login. Compares yesterday's logs against goals and
-// increments, holds, or resets the streak stored in Firestore.
+// ─── Streak logic ─────────────────────────────────────────────────────────────
 
 async function checkAndUpdateStreak(uid, currentStreak, lastStreakDate) {
   const today     = getTodayKey()
   const yesterday = getYesterdayKey()
 
-  // Already ran this check today — nothing to do
   if (lastStreakDate === today) return currentStreak
 
-  // Missed at least one full day → reset
   if (lastStreakDate !== yesterday) {
-    // Brand new account: don't punish, just stamp today
     if (!lastStreakDate) {
       await setDoc(doc(db, 'households', uid), { streak: 0, lastStreakDate: today }, { merge: true })
       return 0
@@ -45,7 +38,6 @@ async function checkAndUpdateStreak(uid, currentStreak, lastStreakDate) {
     return 0
   }
 
-  // lastStreakDate was yesterday — evaluate yesterday's logs
   const q    = query(collection(db, 'logs'), where('uid', '==', uid), where('date', '==', yesterday))
   const snap = await getDocs(q)
   const yesterdayLogs = snap.docs.map(d => d.data())
@@ -63,7 +55,7 @@ async function checkAndUpdateStreak(uid, currentStreak, lastStreakDate) {
   return newStreak
 }
 
-// App
+// ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const [user,        setUser]        = useState(null)
@@ -87,7 +79,7 @@ export default function App() {
     getDoc(doc(db, 'households', user.uid)).then(async snap => {
       if (snap.exists()) {
         const d = snap.data()
-        if (d.rate)                setRate(d.rate)
+        if (d.rate)                     setRate(d.rate)
         if (d.baseHealth !== undefined) setHealth(d.baseHealth)
         const updatedStreak = await checkAndUpdateStreak(
           user.uid,
@@ -120,7 +112,7 @@ export default function App() {
     return unsub
   }, [user])
 
-  // Handlers
+  // ─── Handlers ───────────────────────────────────────────────────────────────
 
   async function handleLog(entry) {
     if (!user) return
@@ -157,7 +149,7 @@ export default function App() {
     if (user) await setDoc(doc(db, 'households', user.uid), { baseHealth: newHealth }, { merge: true })
   }
 
-  // Render
+  // ─── Render ─────────────────────────────────────────────────────────────────
 
   if (authLoading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'system-ui' }}>
@@ -168,7 +160,15 @@ export default function App() {
   if (!user) return <Auth onAuth={setUser} />
 
   return (
-    <div style={{ maxWidth: 420, margin: '0 auto', padding: '20px 16px', fontFamily: 'system-ui, sans-serif', background: '#f9f9f9', minHeight: '100vh' }}>
+    <div style={{
+      maxWidth: 420,
+      margin: '0 auto',
+      padding: '20px 16px 100px',   // 100px bottom = clears the fixed tab bar
+      fontFamily: 'system-ui, sans-serif',
+      background: '#f9f9f9',
+      minHeight: '100vh',
+    }}>
+      {/* ── Header ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
         <div style={{ fontSize: 22, fontWeight: 700 }}>💧 AquaGuardian</div>
         <button onClick={() => signOut(auth)} style={{
@@ -178,12 +178,28 @@ export default function App() {
       </div>
       <div style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>Family water tracker</div>
 
-      <SpiritWidget   health={health} streak={streak} onChallengeComplete={handleChallengeComplete} />
-      {logs.length > 0 && <InsightCard logs={logs} rate={rate} streak={streak} />}
-      <ActivityLogger onLog={handleLog} />
-      <LogHistory     logs={logs} />
-      <BillSummary    logs={logs} rate={rate} />
-      <Settings       rate={rate} onChange={handleRateChange} user={user} />
+      {/* ── Pages ── */}
+      <Routes>
+        <Route path="/" element={
+          <DashboardPage
+            health={health}
+            streak={streak}
+            logs={logs}
+            rate={rate}
+            onLog={handleLog}
+            onChallengeComplete={handleChallengeComplete}
+          />
+        } />
+        <Route path="/bill" element={
+          <BillPage logs={logs} rate={rate} />
+        } />
+        <Route path="/settings" element={
+          <SettingsPage rate={rate} onChange={handleRateChange} user={user} />
+        } />
+      </Routes>
+
+      {/* ── Bottom nav ── */}
+      <BottomNav />
     </div>
   )
 }
