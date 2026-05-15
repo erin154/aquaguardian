@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { auth, db } from './firebase'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
-import { collection, addDoc, query, where, onSnapshot, doc, setDoc, getDoc } from 'firebase/firestore'
+import { collection, addDoc, query, where, onSnapshot, getDocs, doc, setDoc, getDoc } from 'firebase/firestore'
 import Auth from './Auth'
 
 const ACTIVITIES = [
@@ -40,7 +40,15 @@ const INSIGHT_CARDS = [
 ]
 
 function getStage(health) { return SPIRIT_STAGES.find(s => health >= s.min) }
+
 function getTodayKey() { return new Date().toISOString().split('T')[0] }
+
+// Returns yesterday's date as a YYYY-MM-DD string
+function getYesterdayKey() {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  return d.toISOString().split('T')[0]
+}
 
 function computeHealthDelta(logs) {
   let delta = 0
@@ -50,6 +58,50 @@ function computeHealthDelta(logs) {
     else delta -= Math.round((ratio - 1) * 25)
   })
   return delta
+}
+
+// Checks yesterday's logs and increments, holds, or resets the streak.
+// lastStreakDate tells us the last day we ran this check.
+async function checkAndUpdateStreak(uid, currentStreak, lastStreakDate) {
+  const today = getTodayKey()
+  const yesterday = getYesterdayKey()
+
+  // Already ran this check today — nothing to do
+  if (lastStreakDate === today) return currentStreak
+
+  // If the last check was NOT yesterday, the user missed at least one full day → reset
+  if (lastStreakDate !== yesterday) {
+    // Special case: brand new account with no lastStreakDate yet — don't punish, just stamp today
+    if (!lastStreakDate) {
+      await setDoc(doc(db, 'households', uid), { streak: 0, lastStreakDate: today }, { merge: true })
+      return 0
+    }
+    await setDoc(doc(db, 'households', uid), { streak: 0, lastStreakDate: today }, { merge: true })
+    return 0
+  }
+
+  // lastStreakDate was yesterday — fetch yesterday's logs and evaluate
+  const q = query(
+    collection(db, 'logs'),
+    where('uid', '==', uid),
+    where('date', '==', yesterday)
+  )
+  const snap = await getDocs(q)
+  const yesterdayLogs = snap.docs.map(d => d.data())
+
+  // No logs yesterday = missed day → reset
+  if (yesterdayLogs.length === 0) {
+    await setDoc(doc(db, 'households', uid), { streak: 0, lastStreakDate: today }, { merge: true })
+    return 0
+  }
+
+  const totalUsed = yesterdayLogs.reduce((s, l) => s + l.gallons, 0)
+  const totalGoal = yesterdayLogs.reduce((s, l) => s + l.activityGoal, 0)
+
+  // Met or beat goal yesterday → increment. Went over → reset.
+  const newStreak = totalUsed <= totalGoal ? currentStreak + 1 : 0
+  await setDoc(doc(db, 'households', uid), { streak: newStreak, lastStreakDate: today }, { merge: true })
+  return newStreak
 }
 
 function GoalBar({ used, goal, avg }) {
@@ -250,7 +302,6 @@ export default function App() {
   const [streak, setStreak] = useState(0)
   const [rate, setRate] = useState(0.004)
 
-  // Listen for auth state changes
   useEffect(() => {
     return onAuthStateChanged(auth, u => {
       setUser(u)
@@ -258,63 +309,73 @@ export default function App() {
     })
   }, [])
 
-  // Load household settings (rate, streak, saved health) from Firestore
+  // Load household settings and run the streak check on login
   useEffect(() => {
     if (!user) return
-    getDoc(doc(db, 'households', user.uid)).then(snap => {
+    getDoc(doc(db, 'households', user.uid)).then(async snap => {
       if (snap.exists()) {
         const d = snap.data()
         if (d.rate) setRate(d.rate)
-        if (d.streak) setStreak(d.streak)
-        if (d.baseHealth !== undefined) {
-          setBaseHealth(d.baseHealth)
-          setHealth(d.baseHealth)
-        }
+        if (d.baseHealth !== undefined) setHealth(d.baseHealth)
+
+        // Run streak check — pass in whatever we have saved
+        const savedStreak = d.streak ?? 0
+        const lastStreakDate = d.lastStreakDate ?? null
+        const updatedStreak = await checkAndUpdateStreak(user.uid, savedStreak, lastStreakDate)
+        setStreak(updatedStreak)
+      } else {
+        // Brand new household doc — write defaults including lastStreakDate
+        await setDoc(doc(db, 'households', user.uid), {
+          rate: 0.004,
+          streak: 0,
+          baseHealth: 75,
+          lastStreakDate: getTodayKey(),
+        })
       }
     })
   }, [user])
 
-// Subscribe to today's logs in real time — just sync the list, don't recompute health here
-useEffect(() => {
-  if (!user) return
-  const today = getTodayKey()
-  const q = query(
-    collection(db, 'logs'),
-    where('uid', '==', user.uid),
-    where('date', '==', today)
-  )
-  const unsub = onSnapshot(q, snap => {
-    const data = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-    setLogs(data)
-  })
-  return unsub
-}, [user])
+  // Subscribe to today's logs in real time
+  useEffect(() => {
+    if (!user) return
+    const today = getTodayKey()
+    const q = query(
+      collection(db, 'logs'),
+      where('uid', '==', user.uid),
+      where('date', '==', today)
+    )
+    const unsub = onSnapshot(q, snap => {
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      setLogs(data)
+    })
+    return unsub
+  }, [user])
 
   async function handleLog(entry) {
-  if (!user) return
-  const ratio = entry.gallons / entry.activity.goalGallons
-  let delta = 0
-  if (ratio <= 1) delta = Math.round((1 - ratio) * 20 + 5)
-  else delta = -Math.round((ratio - 1) * 25)
+    if (!user) return
+    const ratio = entry.gallons / entry.activity.goalGallons
+    let delta = 0
+    if (ratio <= 1) delta = Math.round((1 - ratio) * 20 + 5)
+    else delta = -Math.round((ratio - 1) * 25)
 
-  const newHealth = Math.max(0, Math.min(100, health + delta))
-  setHealth(newHealth)
+    const newHealth = Math.max(0, Math.min(100, health + delta))
+    setHealth(newHealth)
 
-  await Promise.all([
-    addDoc(collection(db, 'logs'), {
-      uid: user.uid,
-      date: getTodayKey(),
-      gallons: entry.gallons,
-      activityId: entry.activity.id,
-      activityLabel: entry.activity.label,
-      activityIcon: entry.activity.icon,
-      activityGoal: entry.activity.goalGallons,
-      activityAvg: entry.activity.avgGallons,
-      timestamp: Date.now(),
-    }),
-    setDoc(doc(db, 'households', user.uid), { baseHealth: newHealth }, { merge: true })
-  ])
-}
+    await Promise.all([
+      addDoc(collection(db, 'logs'), {
+        uid: user.uid,
+        date: getTodayKey(),
+        gallons: entry.gallons,
+        activityId: entry.activity.id,
+        activityLabel: entry.activity.label,
+        activityIcon: entry.activity.icon,
+        activityGoal: entry.activity.goalGallons,
+        activityAvg: entry.activity.avgGallons,
+        timestamp: Date.now(),
+      }),
+      setDoc(doc(db, 'households', user.uid), { baseHealth: newHealth }, { merge: true })
+    ])
+  }
 
   async function handleRateChange(newRate) {
     setRate(newRate)
