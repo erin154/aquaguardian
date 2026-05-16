@@ -15,21 +15,16 @@ import AnalyticsPage from './pages/AnalyticsPage'
 
 // ─── Date helpers ────────────────────────────────────────────────────────────
 
-function getTodayKey() {
-  return new Date().toISOString().split('T')[0]
+function dateKey(d = new Date()) {
+  const y  = d.getFullYear()
+  const m  = String(d.getMonth() + 1).padStart(2, '0')
+  const dy = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dy}`
 }
 
-function getYesterdayKey() {
-  const d = new Date()
-  d.setDate(d.getDate() - 1)
-  return d.toISOString().split('T')[0]
-}
-
-function getNDaysAgoKey(n) {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return d.toISOString().split('T')[0]
-}
+function getTodayKey()       { return dateKey() }
+function getYesterdayKey()   { const d = new Date(); d.setDate(d.getDate() - 1); return dateKey(d) }
+function getNDaysAgoKey(n)   { const d = new Date(); d.setDate(d.getDate() - n); return dateKey(d) }
 
 // ─── Streak logic ─────────────────────────────────────────────────────────────
 
