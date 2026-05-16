@@ -46,8 +46,7 @@ export default function Settings({ rate, onChange, user, activities, activityGoa
             step="0.001"
             value={rate}
             onChange={e => onChange(parseFloat(e.target.value) || 0)}
-            style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 15 }}
-          />
+            style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 15, color: '#333', background: '#fff' }}          />
           <span style={{ fontSize: 13, color: '#888' }}>/ gal</span>
         </div>
         <div style={{ fontSize: 12, color: '#bbb', marginTop: 8 }}>Signed in as {user.email}</div>
@@ -64,8 +63,7 @@ export default function Settings({ rate, onChange, user, activities, activityGoa
             type="number"
             value={draftDaily}
             onChange={e => handleDailyChange(e.target.value)}
-            style={{ width: 90, padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 15, textAlign: 'center' }}
-          />
+            style={{ width: 90, padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 15, textAlign: 'center', color: '#333', background: '#fff' }}          />
           <span style={{ fontSize: 13, color: '#888' }}>gal / day</span>
         </div>
       </div>
@@ -103,7 +101,8 @@ export default function Settings({ rate, onChange, user, activities, activityGoa
                       fontSize: 14,
                       textAlign: 'center',
                       fontWeight: 600,
-                      color: '#ffffffff',
+                      color: '#333',
+                      background: '#fff',
                     }}
                   />
                   <span style={{ fontSize: 12, color: '#aaa' }}>gal</span>
