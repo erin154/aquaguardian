@@ -12,6 +12,7 @@ import DashboardPage from './pages/DashboardPage'
 import BillPage      from './pages/BillPage'
 import SettingsPage  from './pages/SettingsPage'
 import AnalyticsPage from './pages/AnalyticsPage'
+import { ACTIVITIES } from './constants'
 
 // ─── Date helpers ────────────────────────────────────────────────────────────
 
@@ -63,13 +64,21 @@ async function checkAndUpdateStreak(uid, currentStreak, lastStreakDate) {
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [user,        setUser]        = useState(null)
-  const [authLoading, setAuthLoading] = useState(true)
-  const [logs,        setLogs]        = useState([])       // today only
-  const [allLogs,     setAllLogs]     = useState([])       // past 30 days
-  const [health,      setHealth]      = useState(75)
-  const [streak,      setStreak]      = useState(0)
-  const [rate,        setRate]        = useState(0.004)
+  const [user,          setUser]          = useState(null)
+  const [authLoading,   setAuthLoading]   = useState(true)
+  const [logs,          setLogs]          = useState([])
+  const [allLogs,       setAllLogs]       = useState([])
+  const [health,        setHealth]        = useState(75)
+  const [streak,        setStreak]        = useState(0)
+  const [rate,          setRate]          = useState(0.004)
+  const [activityGoals, setActivityGoals] = useState({})   // { shower: 14, dishes: 4, ... }
+  const [dailyGoal,     setDailyGoal]     = useState(80)   // gallons/day household target
+
+  // Build the live activities array: ACTIVITIES defaults overridden by user's saved goals
+  const activities = ACTIVITIES.map(a => ({
+    ...a,
+    goalGallons: activityGoals[a.id] ?? a.goalGallons,
+  }))
 
   // Listen for login / logout
   useEffect(() => {
@@ -87,6 +96,8 @@ export default function App() {
         const d = snap.data()
         if (d.rate)                     setRate(d.rate)
         if (d.baseHealth !== undefined) setHealth(d.baseHealth)
+        if (d.activityGoals)            setActivityGoals(d.activityGoals)
+        if (d.dailyGoal !== undefined)  setDailyGoal(d.dailyGoal)
         const updatedStreak = await checkAndUpdateStreak(
           user.uid,
           d.streak ?? 0,
@@ -99,6 +110,8 @@ export default function App() {
           streak: 0,
           baseHealth: 75,
           lastStreakDate: getTodayKey(),
+          activityGoals: {},
+          dailyGoal: 80,
         })
       }
     })
@@ -118,7 +131,7 @@ export default function App() {
     return unsub
   }, [user])
 
-  // Subscribe to past 30 days of logs for Analytics
+  // Subscribe to past 365 days of logs for Analytics
   useEffect(() => {
     if (!user) return
     const thirtyDaysAgo = getNDaysAgoKey(365)
@@ -165,6 +178,17 @@ export default function App() {
     if (user) await setDoc(doc(db, 'households', user.uid), { rate: newRate }, { merge: true })
   }
 
+  async function handleGoalsChange(newActivityGoals, newDailyGoal) {
+    setActivityGoals(newActivityGoals)
+    setDailyGoal(newDailyGoal)
+    if (user) {
+      await setDoc(doc(db, 'households', user.uid), {
+        activityGoals: newActivityGoals,
+        dailyGoal: newDailyGoal,
+      }, { merge: true })
+    }
+  }
+
   async function handleChallengeComplete(reward) {
     const newHealth = Math.min(100, health + reward)
     setHealth(newHealth)
@@ -208,6 +232,8 @@ export default function App() {
             streak={streak}
             logs={logs}
             rate={rate}
+            activities={activities}
+            dailyGoal={dailyGoal}
             onLog={handleLog}
             onChallengeComplete={handleChallengeComplete}
           />
@@ -219,7 +245,15 @@ export default function App() {
           <BillPage logs={logs} rate={rate} />
         } />
         <Route path="/settings" element={
-          <SettingsPage rate={rate} onChange={handleRateChange} user={user} />
+          <SettingsPage
+            rate={rate}
+            onChange={handleRateChange}
+            user={user}
+            activities={activities}
+            activityGoals={activityGoals}
+            dailyGoal={dailyGoal}
+            onGoalsChange={handleGoalsChange}
+          />
         } />
       </Routes>
 
