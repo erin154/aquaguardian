@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router-dom'
 
 const tabs = [
-  { to: '/',         label: 'Home',     icon: '💧' },
-  { to: '/bill',     label: 'Bill',     icon: '💰' },
-  { to: '/settings', label: 'Settings', icon: '⚙️' },
+  { to: '/',          label: 'Home',      icon: '💧' },
+  { to: '/analytics', label: 'Analytics', icon: '📊' },
+  { to: '/bill',      label: 'Bill',      icon: '💰' },
+  { to: '/settings',  label: 'Settings',  icon: '⚙️' },
 ]
 
 export default function BottomNav() {
@@ -18,14 +19,14 @@ export default function BottomNav() {
       display: 'flex',
       justifyContent: 'space-around',
       alignItems: 'center',
-      padding: '10px 0 24px',   // 24px bottom padding = safe area on iPhone
+      padding: '10px 0 24px',
       zIndex: 100,
     }}>
       {tabs.map(tab => (
         <NavLink
           key={tab.to}
           to={tab.to}
-          end={tab.to === '/'}    // "end" means only match exactly "/" not "/bill"
+          end={tab.to === '/'}
           style={({ isActive }) => ({
             display: 'flex',
             flexDirection: 'column',
@@ -35,11 +36,11 @@ export default function BottomNav() {
             color: isActive ? '#1D9E75' : '#aaa',
             fontSize: 11,
             fontWeight: isActive ? 600 : 400,
-            minWidth: 60,
+            minWidth: 50,
             transition: 'color 0.2s',
           })}
         >
-          <span style={{ fontSize: 24 }}>{tab.icon}</span>
+          <span style={{ fontSize: 22 }}>{tab.icon}</span>
           {tab.label}
         </NavLink>
       ))}

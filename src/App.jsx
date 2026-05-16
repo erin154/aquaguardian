@@ -2,12 +2,16 @@ import { useState, useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { auth, db } from './firebase'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
-import { collection, addDoc, query, where, onSnapshot, getDocs, doc, setDoc, getDoc } from 'firebase/firestore'
+import {
+  collection, addDoc, query, where, orderBy,
+  onSnapshot, getDocs, doc, setDoc, getDoc
+} from 'firebase/firestore'
 import Auth          from './Auth'
 import BottomNav     from './components/BottomNav'
 import DashboardPage from './pages/DashboardPage'
 import BillPage      from './pages/BillPage'
 import SettingsPage  from './pages/SettingsPage'
+import AnalyticsPage from './pages/AnalyticsPage'
 
 // ─── Date helpers ────────────────────────────────────────────────────────────
 
@@ -18,6 +22,12 @@ function getTodayKey() {
 function getYesterdayKey() {
   const d = new Date()
   d.setDate(d.getDate() - 1)
+  return d.toISOString().split('T')[0]
+}
+
+function getNDaysAgoKey(n) {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
   return d.toISOString().split('T')[0]
 }
 
@@ -60,7 +70,8 @@ async function checkAndUpdateStreak(uid, currentStreak, lastStreakDate) {
 export default function App() {
   const [user,        setUser]        = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
-  const [logs,        setLogs]        = useState([])
+  const [logs,        setLogs]        = useState([])       // today only
+  const [allLogs,     setAllLogs]     = useState([])       // past 30 days
   const [health,      setHealth]      = useState(75)
   const [streak,      setStreak]      = useState(0)
   const [rate,        setRate]        = useState(0.004)
@@ -108,6 +119,22 @@ export default function App() {
     )
     const unsub = onSnapshot(q, snap => {
       setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    })
+    return unsub
+  }, [user])
+
+  // Subscribe to past 30 days of logs for Analytics
+  useEffect(() => {
+    if (!user) return
+    const thirtyDaysAgo = getNDaysAgoKey(365)
+    const q = query(
+      collection(db, 'logs'),
+      where('uid', '==', user.uid),
+      where('date', '>=', thirtyDaysAgo),
+      orderBy('date', 'asc')
+    )
+    const unsub = onSnapshot(q, snap => {
+      setAllLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })))
     })
     return unsub
   }, [user])
@@ -163,7 +190,7 @@ export default function App() {
     <div style={{
       maxWidth: 420,
       margin: '0 auto',
-      padding: '20px 16px 100px',   // 100px bottom = clears the fixed tab bar
+      padding: '20px 16px 100px',
       fontFamily: 'system-ui, sans-serif',
       background: '#f9f9f9',
       minHeight: '100vh',
@@ -189,6 +216,9 @@ export default function App() {
             onLog={handleLog}
             onChallengeComplete={handleChallengeComplete}
           />
+        } />
+        <Route path="/analytics" element={
+          <AnalyticsPage allLogs={allLogs} rate={rate} />
         } />
         <Route path="/bill" element={
           <BillPage logs={logs} rate={rate} />
