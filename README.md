@@ -1,6 +1,10 @@
 ## 💧 AquaGuardian — Household Water Conservation App
 <img width="146.25" height="316.5" alt="Screenshot 2026-05-27 at 7 00 25 AM" src="https://github.com/user-attachments/assets/ee649195-4e1e-434c-876a-734db32afd75" />
 <img width="146.25" height="316.5" alt="IMG_0823" src="https://github.com/user-attachments/assets/f508b7cb-a6b9-4dc5-81d7-d2b57f96a699" />
+<img width="146.25" height="316.5" alt="IMG_0825" src="https://github.com/user-attachments/assets/e5490406-11a1-4b75-9d57-ec8742b87435" />
+<img width="146.25" height="316.5" alt="IMG_0826" src="https://github.com/user-attachments/assets/d4d7a249-97a5-44cb-ae05-985b4bbf0605" />
+<img width="146.25" height="316.5" alt="IMG_0827" src="https://github.com/user-attachments/assets/4d7b7945-e2fe-4e98-b64f-700c8e745e2e" />
+
 
 **Live App:** [aquaguardian-jet.vercel.app](https://aquaguardian-jet.vercel.app)
 
