@@ -17,10 +17,20 @@ export default function Auth({ onAuth }) {
       const result = await fn(auth, email, password)
       onAuth(result.user)
     } catch (e) {
-      setError(e.message.replace('Firebase: ', ''))
+      const friendly = {
+        'auth/email-already-in-use': 'An account with that email already exists.',
+        'auth/wrong-password': 'Incorrect password. Please try again.',
+        'auth/user-not-found': 'No account found with that email.',
+        'auth/weak-password': 'Password must be at least 6 characters.',
+        'auth/invalid-email': 'Please enter a valid email address.',
+        'auth/too-many-requests': 'Too many attempts. Please wait a moment and try again.',
+      }
+      const code = e.code || ''
+      setError(friendly[code] || 'Something went wrong. Please try again.')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
-  }
+  }  // ← this was missing
 
   return (
     <div style={{ maxWidth: 420, margin: '0 auto', padding: '40px 16px', fontFamily: 'system-ui, sans-serif' }}>
