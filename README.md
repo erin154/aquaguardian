@@ -33,24 +33,8 @@ onSnapshot listener (all family devices update live)
 The component tree is modular — `App.jsx` is a pure orchestrator, with all UI components split into `src/components/` and shared constants in `src/constants/`.
 
 ### 🗂️ Key File Structure
-src/
-├── App.jsx              # Route orchestrator only
-├── Auth.jsx             # Login / signup screen
-├── firebase.js          # Firebase init (db + auth exports)
-├── main.jsx             # Entry point
-├── components/
-│   ├── DashboardPage.jsx
-│   ├── AnalyticsPage.jsx
-│   ├── BillPage.jsx
-│   ├── SettingsPage.jsx
-│   ├── SpiritWidget.jsx
-│   ├── ActivityLogger.jsx
-│   ├── GoalBar.jsx
-│   ├── InsightCard.jsx
-│   ├── LogHistory.jsx
-│   ├── BillSummary.jsx
-│   └── BottomNav.jsx
-└── constants/           # Shared activity definitions, goals
+<img width="457" height="364" alt="Screenshot 2026-05-27 at 3 52 03 AM" src="https://github.com/user-attachments/assets/0bcfb910-8f1d-4aaa-b42a-4022ee016f20" />
+
 
 ### 🔭 Roadmap
 
