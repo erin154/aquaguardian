@@ -1,4 +1,6 @@
 ## 💧 AquaGuardian — Household Water Conservation App
+<img width="146.25" height="316.5" alt="Screenshot 2026-05-27 at 7 00 25 AM" src="https://github.com/user-attachments/assets/ee649195-4e1e-434c-876a-734db32afd75" />
+<img width="146.25" height="316.5" alt="IMG_0823" src="https://github.com/user-attachments/assets/f508b7cb-a6b9-4dc5-81d7-d2b57f96a699" />
 
 **Live App:** [aquaguardian-jet.vercel.app](https://aquaguardian-jet.vercel.app)
 
@@ -52,17 +54,10 @@ The component tree is modular — `App.jsx` is a pure orchestrator, with all UI 
 |---|---|
 | **Framework** | React 18 (Vite) |
 | **Routing** | React Router v6 |
-| **Styling** | CSS Modules + inline styles |
-| **Backend / Database** | Firebase Firestore (real-time sync) |
-| **Authentication** | Firebase Auth (email + password) |
-| **Hosting** | Vercel (auto-deploy on git push) |
+| **Styling** | CSS Modules |
+| **Database** | Firebase Firestore |
+| **Authentication** | Firebase Auth |
+| **Hosting** | Vercel |
 | **PWA** | Web App Manifest + Apple meta tags |
-| **Build Tool** | Vite |
-| **Package Manager** | npm |
-| **Version Control** | Git + GitHub |
-| **IDE** | VS Code |
-| **Dev Server** | localhost:5173 (Vite HMR) |
-| **Platform** | macOS |
-| **Target Device** | iOS (iPhone, installed as PWA) |
 | **Planned: IoT** | ESP32 microcontroller + YF-S201 flow meters → Firebase Realtime Database |
 | **Planned: Notifications** | Firebase Cloud Messaging (FCM) |
